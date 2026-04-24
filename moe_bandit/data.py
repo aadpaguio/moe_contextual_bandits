@@ -3,33 +3,12 @@ from __future__ import annotations
 import numpy as np
 
 
-def _build_cluster_means(
-    K: int,
-    d: int,
-    cluster_sep: float,
-    cluster_std: float,
-    rng: np.random.Generator,
-) -> np.ndarray:
-    """
-    Build cluster centers with a clean geometric interpretation when possible.
-
-    - If d >= K: use the first K standard basis vectors scaled by
-      cluster_sep * cluster_std.
-    - Else: sample K random unit vectors in R^d and scale by
-      cluster_sep * cluster_std.
-    """
+def _build_cluster_means(K, d, cluster_sep, cluster_std, rng):
     separation_scale = cluster_sep * cluster_std
-
-    if d >= K:
-        means = np.zeros((K, d), dtype=np.float64)
-        means[np.arange(K), np.arange(K)] = separation_scale
-        return means
-
+    # Always use random unit vectors, regardless of d vs K relationship
     raw = rng.normal(size=(K, d))
     norms = np.linalg.norm(raw, axis=1, keepdims=True)
-    norms = np.clip(norms, 1e-12, None)
-    unit = raw / norms
-    # With d < K these directions are not orthogonal; pairwise distances vary.
+    unit = raw / np.clip(norms, 1e-12, None)
     return separation_scale * unit
 
 

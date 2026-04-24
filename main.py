@@ -22,6 +22,19 @@ def main() -> None:
         default=0,
         help="Increase log verbosity: default WARNING, -v INFO, -vv DEBUG.",
     )
+    parser.add_argument(
+        "--regimes",
+        nargs="+",
+        choices=["independent", "joint"],
+        default=["independent"],
+        help="Expert training regime(s): independent (per-cluster), joint (MoE). "
+        "Pass both to compare on the same grid with matched seeds.",
+    )
+    parser.add_argument(
+        "--approx-error",
+        action="store_true",
+        help="Write ridge ε diagnostic per cell to approx_error_by_regime.jsonl.",
+    )
     args = parser.parse_args()
     output_dir: Path = args.output_dir
     if args.verbose >= 2:
@@ -30,7 +43,12 @@ def main() -> None:
         log_level = logging.INFO
     else:
         log_level = logging.WARNING
-    run_main_grid(output_dir=output_dir, log_level=log_level)
+    run_main_grid(
+        output_dir=output_dir,
+        expert_training_regimes=tuple(args.regimes),
+        write_approx_error_jsonl=args.approx_error,
+        log_level=log_level,
+    )
     print(f"Saved main grid outputs to: {output_dir.resolve()}")
 
 
