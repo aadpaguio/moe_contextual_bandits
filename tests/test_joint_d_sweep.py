@@ -18,8 +18,25 @@ def test_joint_d_sweep_small_runs(tmp_path):
     )
     rows, artifacts = run_joint_d_sweep(output_dir=tmp_path, settings=settings)
 
-    assert len(rows) == 8  # 2 d values x 1 seed x 4 policies
-    assert {r.policy for r in rows} == {"linucb_raw", "epsilon_greedy", "softmax_router", "oracle"}
+    expected_policies = {
+        "uniform",
+        "epsilon_greedy",
+        "softmax_router",
+        "oracle",
+        "linucb_raw",
+        "linucb_raw_alpha_0.5",
+        "linucb_raw_alpha_1",
+        "linucb_raw_alpha_2",
+        "linucb_raw_alpha_4",
+        "linucb_raw_alpha_8",
+    }
+    assert len(rows) == 20  # 2 d values x 1 seed x 10 policy rows
+    assert {r.policy for r in rows} == expected_policies
+    assert all(
+        r.linucb_alpha is not None
+        for r in rows
+        if r.policy == "linucb_raw" or r.policy.startswith("linucb_raw_alpha_")
+    )
     assert "d_2_seed_0" in artifacts["runs"]
     assert "d_4_seed_0" in artifacts["runs"]
     assert (tmp_path / "results_rows.csv").exists()

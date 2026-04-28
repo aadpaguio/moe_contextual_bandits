@@ -12,7 +12,12 @@ import numpy as np
 
 from moe_bandit.data import generate_synthetic_data
 from moe_bandit.experts import expert_reward_matrix
-from moe_bandit.policies import EpsilonGreedyPolicy, LinUCBPolicy, train_softmax_router
+from moe_bandit.policies import (
+    EpsilonGreedyPolicy,
+    LinUCBPolicy,
+    UniformRandomPolicy,
+    train_softmax_router,
+)
 from moe_bandit.runner import RunResult, run_bandit
 from moe_bandit.train_joint_moe import train_joint_moe
 
@@ -36,6 +41,7 @@ class JointDSweepSettings:
     )
     clip_eps: float = 1e-3
     linucb_alpha: float = 1.0
+    linucb_alphas: tuple[float, ...] = (0.5, 1.0, 2.0, 4.0, 8.0)
     linucb_lambda: float = 1.0
     forced_explore_per_arm: int = 20
     softmax_hidden_dim: int = 64
@@ -77,6 +83,7 @@ class DSweepResultRow:
     chosen_arm_mean_reward: float
     best_arm_acc: float
     oracle_mean_reward: float
+    linucb_alpha: float | None = None
 
 
 class OraclePolicy:
@@ -102,9 +109,9 @@ def _rescale_rewards_01(R_raw: np.ndarray) -> np.ndarray:
     return ((R_raw - r_min) / (r_max - r_min)).astype(np.float64)
 
 
-def _zscore_with_stream_stats(X: np.ndarray) -> np.ndarray:
-    mean = X.mean(axis=0, keepdims=True)
-    std = X.std(axis=0, keepdims=True)
+def _zscore_from_reference(reference: np.ndarray, X: np.ndarray) -> np.ndarray:
+    mean = reference.mean(axis=0, keepdims=True)
+    std = reference.std(axis=0, keepdims=True)
     std = np.clip(std, 1e-8, None)
     return ((X - mean) / std).astype(np.float64)
 
@@ -134,6 +141,7 @@ def _row_from_result(
     *,
     rmse_epsilon: float,
     oracle_mean_reward: float,
+    linucb_alpha: float | None = None,
 ) -> DSweepResultRow:
     cum_regret = result.cumulative_regret()
     best_arm_acc = float(np.mean(result.chosen_arm == result.oracle_arm))
@@ -147,6 +155,7 @@ def _row_from_result(
         chosen_arm_mean_reward=float(result.reward.mean()),
         best_arm_acc=best_arm_acc,
         oracle_mean_reward=oracle_mean_reward,
+        linucb_alpha=linucb_alpha,
     )
 
 
@@ -180,6 +189,7 @@ def _write_summary_csv(path: Path, rows: list[DSweepResultRow], d_values: tuple[
     fieldnames = [
         "d",
         "rmse_epsilon",
+        "uniform_regret",
         "linucb_regret",
         "epsilon_greedy_regret",
         "softmax_regret",
@@ -194,6 +204,7 @@ def _write_summary_csv(path: Path, rows: list[DSweepResultRow], d_values: tuple[
         writer.writeheader()
         for d in d_values:
             rmse_epsilon = float(np.mean([row.rmse_epsilon for row in rows if row.d == d]))
+            uniform_regret = _aggregate_metric(rows, policy="uniform", metric="final_cum_regret", d=d)
             linucb_regret = _aggregate_metric(rows, policy="linucb_raw", metric="final_cum_regret", d=d)
             eps_regret = _aggregate_metric(
                 rows, policy="epsilon_greedy", metric="final_cum_regret", d=d
@@ -208,6 +219,7 @@ def _write_summary_csv(path: Path, rows: list[DSweepResultRow], d_values: tuple[
                 {
                     "d": d,
                     "rmse_epsilon": rmse_epsilon,
+                    "uniform_regret": uniform_regret,
                     "linucb_regret": linucb_regret,
                     "epsilon_greedy_regret": eps_regret,
                     "softmax_regret": softmax_regret,
@@ -226,7 +238,7 @@ def _plot_regret_curves_by_d(
     n_rows = int(np.ceil(len(d_values) / n_cols))
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(5 * n_cols, 3.5 * n_rows), sharey=True)
     axes_arr = np.asarray(axes).reshape(-1)
-    policy_order = ["linucb_raw", "epsilon_greedy", "softmax_router", "oracle"]
+    policy_order = ["uniform", "epsilon_greedy", "linucb_raw", "softmax_router", "oracle"]
 
     for idx, d in enumerate(d_values):
         ax = axes_arr[idx]
@@ -260,6 +272,9 @@ def _plot_summary_vs_d(output_dir: Path, rows: list[DSweepResultRow], d_values: 
     linucb = np.asarray(
         [_aggregate_metric(rows, policy="linucb_raw", metric="final_cum_regret", d=d) for d in d_values]
     )
+    uniform = np.asarray(
+        [_aggregate_metric(rows, policy="uniform", metric="final_cum_regret", d=d) for d in d_values]
+    )
     eps = np.asarray(
         [
             _aggregate_metric(rows, policy="epsilon_greedy", metric="final_cum_regret", d=d)
@@ -282,6 +297,7 @@ def _plot_summary_vs_d(output_dir: Path, rows: list[DSweepResultRow], d_values: 
     ax.set_xscale("log", base=2)
 
     ax = axes[0, 1]
+    ax.plot(d_arr, uniform, marker="o", label="uniform")
     ax.plot(d_arr, linucb, marker="o", label="LinUCB")
     ax.plot(d_arr, eps, marker="o", label="epsilon-greedy")
     ax.plot(d_arr, softmax, marker="o", label="softmax")
@@ -369,7 +385,8 @@ def run_joint_d_sweep(
                 cluster_std=settings.cluster_std,
                 seed=seed_bandit_stream,
             )
-            X_bandit_std = _zscore_with_stream_stats(X_bandit)
+            X_train_std = _zscore_from_reference(X_train, X_train)
+            X_bandit_std = _zscore_from_reference(X_train, X_bandit)
 
             experts, _ = train_joint_moe(
                 X_train=X_train,
@@ -392,9 +409,13 @@ def run_joint_d_sweep(
             rmse_epsilon = _ridge_rmse_epsilon(R_raw, X_bandit, lambda_reg=settings.linucb_lambda)
             oracle_arm = np.argmax(R, axis=1)
 
+            R_router_train_raw = expert_reward_matrix(
+                experts, X_train, y_train, clip_eps=settings.clip_eps
+            )
+            R_router_train = _rescale_rewards_01(R_router_train_raw)
             softmax_router = train_softmax_router(
-                X_train=X_bandit_std,
-                R_train=R,
+                X_train=X_train_std,
+                R_train=R_router_train,
                 hidden_dim=settings.softmax_hidden_dim,
                 epochs=settings.softmax_epochs,
                 batch_size=settings.softmax_batch_size,
@@ -402,21 +423,45 @@ def run_joint_d_sweep(
                 seed=seed_policy,
             )
 
-            policies = {
-                "linucb_raw": LinUCBPolicy(
-                    K=settings.K,
-                    d=d,
-                    alpha=settings.linucb_alpha,
-                    lambda_reg=settings.linucb_lambda,
-                    forced_explore_per_arm=settings.forced_explore_per_arm,
-                    seed=seed_policy,
-                ),
+            linucb_policies: dict[str, tuple[LinUCBPolicy, float]] = {}
+            for alpha in settings.linucb_alphas:
+                alpha_f = float(alpha)
+                label = f"linucb_raw_alpha_{alpha_f:g}"
+                linucb_policies[label] = (
+                    LinUCBPolicy(
+                        K=settings.K,
+                        d=d,
+                        alpha=alpha_f,
+                        lambda_reg=settings.linucb_lambda,
+                        forced_explore_per_arm=settings.forced_explore_per_arm,
+                        seed=seed_policy,
+                    ),
+                    alpha_f,
+                )
+                # Keep legacy key for downstream summaries/plots.
+                if np.isclose(alpha_f, settings.linucb_alpha):
+                    linucb_policies["linucb_raw"] = (
+                        LinUCBPolicy(
+                            K=settings.K,
+                            d=d,
+                            alpha=alpha_f,
+                            lambda_reg=settings.linucb_lambda,
+                            forced_explore_per_arm=settings.forced_explore_per_arm,
+                            seed=seed_policy,
+                        ),
+                        alpha_f,
+                    )
+
+            policies: dict[str, Any] = {
+                "uniform": UniformRandomPolicy(K=settings.K, seed=seed_policy),
                 "epsilon_greedy": EpsilonGreedyPolicy(
                     K=settings.K, c=settings.epsilon_greedy_c, seed=seed_policy
                 ),
                 "softmax_router": softmax_router,
                 "oracle": OraclePolicy(oracle_arm=oracle_arm),
             }
+            for policy_name, (policy_obj, _) in linucb_policies.items():
+                policies[policy_name] = policy_obj
 
             run_store: dict[str, Any] = {
                 "d": d,
@@ -435,6 +480,9 @@ def run_joint_d_sweep(
             oracle_mean_reward = float(np.max(R, axis=1).mean())
             for policy_name, policy_obj in policies.items():
                 result = run_bandit(policy=policy_obj, X=X_bandit_std, R=R, seed=seed_policy)
+                alpha_for_row = (
+                    linucb_policies[policy_name][1] if policy_name in linucb_policies else None
+                )
                 rows.append(
                     _row_from_result(
                         cfg,
@@ -442,6 +490,7 @@ def run_joint_d_sweep(
                         result,
                         rmse_epsilon=rmse_epsilon,
                         oracle_mean_reward=oracle_mean_reward,
+                        linucb_alpha=alpha_for_row,
                     )
                 )
                 run_store["policies"][policy_name] = {

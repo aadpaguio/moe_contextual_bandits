@@ -1,0 +1,83 @@
+\begin{table}[t]
+\centering
+\caption{Best-arm accuracy by policy and dimension (mean $\pm$ std across seeds).}
+\label{tab:best-arm-acc-summary}
+\begin{tabular}{lrrr}
+\toprule
+Policy & $d$ & Mean acc. & Std acc. \\
+\midrule
+cluster\_label\_router & 2 & 0.3198 & 0.0488 \\
+cluster\_label\_router & 4 & 0.2341 & 0.1014 \\
+cluster\_label\_router & 8 & 0.2311 & 0.0888 \\
+cluster\_label\_router & 16 & 0.2655 & 0.0802 \\
+cluster\_label\_router & 32 & 0.1845 & 0.0642 \\
+cluster\_label\_router & 64 & 0.2914 & 0.0952 \\
+epsilon\_greedy & 2 & 0.2103 & 0.0395 \\
+epsilon\_greedy & 4 & 0.1673 & 0.0602 \\
+epsilon\_greedy & 8 & 0.1702 & 0.0319 \\
+epsilon\_greedy & 16 & 0.2260 & 0.0197 \\
+epsilon\_greedy & 32 & 0.2306 & 0.0215 \\
+epsilon\_greedy & 64 & 0.1836 & 0.0261 \\
+linucb\_raw & 2 & 0.2367 & 0.0876 \\
+linucb\_raw & 4 & 0.1975 & 0.0164 \\
+linucb\_raw & 8 & 0.2890 & 0.0756 \\
+linucb\_raw & 16 & 0.3129 & 0.0362 \\
+linucb\_raw & 32 & 0.2706 & 0.0701 \\
+linucb\_raw & 64 & 0.2990 & 0.0267 \\
+linucb\_raw\_alpha\_0.5 & 2 & 0.2666 & 0.0670 \\
+linucb\_raw\_alpha\_0.5 & 4 & 0.2216 & 0.0309 \\
+linucb\_raw\_alpha\_0.5 & 8 & 0.3733 & 0.1153 \\
+linucb\_raw\_alpha\_0.5 & 16 & 0.3166 & 0.0770 \\
+linucb\_raw\_alpha\_0.5 & 32 & 0.2590 & 0.0617 \\
+linucb\_raw\_alpha\_0.5 & 64 & 0.2635 & 0.0208 \\
+linucb\_raw\_alpha\_1 & 2 & 0.2367 & 0.0876 \\
+linucb\_raw\_alpha\_1 & 4 & 0.1975 & 0.0164 \\
+linucb\_raw\_alpha\_1 & 8 & 0.2890 & 0.0756 \\
+linucb\_raw\_alpha\_1 & 16 & 0.3129 & 0.0362 \\
+linucb\_raw\_alpha\_1 & 32 & 0.2706 & 0.0701 \\
+linucb\_raw\_alpha\_1 & 64 & 0.2990 & 0.0267 \\
+linucb\_raw\_alpha\_2 & 2 & 0.2941 & 0.0066 \\
+linucb\_raw\_alpha\_2 & 4 & 0.2402 & 0.0620 \\
+linucb\_raw\_alpha\_2 & 8 & 0.2748 & 0.0317 \\
+linucb\_raw\_alpha\_2 & 16 & 0.2895 & 0.0501 \\
+linucb\_raw\_alpha\_2 & 32 & 0.2822 & 0.0679 \\
+linucb\_raw\_alpha\_2 & 64 & 0.2830 & 0.0280 \\
+linucb\_raw\_alpha\_4 & 2 & 0.2720 & 0.0342 \\
+linucb\_raw\_alpha\_4 & 4 & 0.2285 & 0.0132 \\
+linucb\_raw\_alpha\_4 & 8 & 0.2485 & 0.0353 \\
+linucb\_raw\_alpha\_4 & 16 & 0.2911 & 0.0489 \\
+linucb\_raw\_alpha\_4 & 32 & 0.3002 & 0.0782 \\
+linucb\_raw\_alpha\_4 & 64 & 0.2952 & 0.0210 \\
+linucb\_raw\_alpha\_8 & 2 & 0.2613 & 0.0184 \\
+linucb\_raw\_alpha\_8 & 4 & 0.2377 & 0.0146 \\
+linucb\_raw\_alpha\_8 & 8 & 0.2568 & 0.0159 \\
+linucb\_raw\_alpha\_8 & 16 & 0.2669 & 0.0227 \\
+linucb\_raw\_alpha\_8 & 32 & 0.2803 & 0.0333 \\
+linucb\_raw\_alpha\_8 & 64 & 0.2962 & 0.0156 \\
+online\_softmax\_best\_arm & 2 & 0.2476 & 0.0792 \\
+online\_softmax\_best\_arm & 4 & 0.1717 & 0.0453 \\
+online\_softmax\_best\_arm & 8 & 0.2358 & 0.0414 \\
+online\_softmax\_best\_arm & 16 & 0.2631 & 0.0294 \\
+online\_softmax\_best\_arm & 32 & 0.2333 & 0.0334 \\
+online\_softmax\_best\_arm & 64 & 0.2571 & 0.0137 \\
+oracle & 2 & 1.0000 & 0.0000 \\
+oracle & 4 & 1.0000 & 0.0000 \\
+oracle & 8 & 1.0000 & 0.0000 \\
+oracle & 16 & 1.0000 & 0.0000 \\
+oracle & 32 & 1.0000 & 0.0000 \\
+oracle & 64 & 1.0000 & 0.0000 \\
+softmax\_best\_arm & 2 & 0.7289 & 0.0129 \\
+softmax\_best\_arm & 4 & 0.6753 & 0.0112 \\
+softmax\_best\_arm & 8 & 0.6325 & 0.0205 \\
+softmax\_best\_arm & 16 & 0.5905 & 0.0235 \\
+softmax\_best\_arm & 32 & 0.5713 & 0.0339 \\
+softmax\_best\_arm & 64 & 0.5069 & 0.0293 \\
+uniform & 2 & 0.2517 & 0.0038 \\
+uniform & 4 & 0.2495 & 0.0046 \\
+uniform & 8 & 0.2508 & 0.0027 \\
+uniform & 16 & 0.2512 & 0.0028 \\
+uniform & 32 & 0.2537 & 0.0026 \\
+uniform & 64 & 0.2501 & 0.0019 \\
+\bottomrule
+\end{tabular}
+\end{table}

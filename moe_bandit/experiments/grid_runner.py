@@ -149,9 +149,9 @@ def _rescale_rewards_01(R_raw: np.ndarray) -> np.ndarray:
     return ((R_raw - r_min) / (r_max - r_min)).astype(np.float64)
 
 
-def _zscore_with_stream_stats(X: np.ndarray) -> np.ndarray:
-    mean = X.mean(axis=0, keepdims=True)
-    std = X.std(axis=0, keepdims=True)
+def _zscore_from_reference(reference: np.ndarray, X: np.ndarray) -> np.ndarray:
+    mean = reference.mean(axis=0, keepdims=True)
+    std = reference.std(axis=0, keepdims=True)
     std = np.clip(std, 1e-8, None)
     return ((X - mean) / std).astype(np.float64)
 
@@ -312,7 +312,8 @@ def run_main_grid(
             seed=cfg.seed_bandit_stream,
         )
         logger.debug("Generated bandit stream in %.3fs shape=%s", time.perf_counter() - t0, X_bandit.shape)
-        X_bandit_std = _zscore_with_stream_stats(X_bandit)
+        X_train_std = _zscore_from_reference(X_train, X_train)
+        X_bandit_std = _zscore_from_reference(X_train, X_bandit)
 
         for regime in expert_training_regimes:
             t0 = time.perf_counter()
@@ -355,9 +356,13 @@ def run_main_grid(
                 )
 
             t0 = time.perf_counter()
+            R_router_train_raw = expert_reward_matrix(
+                experts, X_train, y_train, clip_eps=settings.clip_eps
+            )
+            R_router_train = _rescale_rewards_01(R_router_train_raw)
             softmax_router = train_softmax_router(
-                X_train=X_bandit_std,
-                R_train=R,
+                X_train=X_train_std,
+                R_train=R_router_train,
                 hidden_dim=settings.softmax_hidden_dim,
                 epochs=settings.softmax_epochs,
                 batch_size=settings.softmax_batch_size,
@@ -375,9 +380,9 @@ def run_main_grid(
             )
             with np.errstate(invalid="ignore"):
                 logits = softmax_router.model(
-                    np_to_torch(X_bandit_std, device=softmax_router.device)
+                    np_to_torch(X_train_std, device=softmax_router.device)
                 ).detach()
-                train_labels = np.argmax(R, axis=1)
+                train_labels = np.argmax(R_router_train, axis=1)
                 train_acc = float((logits.argmax(dim=1).cpu().numpy() == train_labels).mean())
                 train_loss = cross_entropy_from_logits(logits.cpu().numpy(), train_labels)
             logger.info(

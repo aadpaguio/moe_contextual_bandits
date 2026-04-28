@@ -1,0 +1,16 @@
+\begin{table}[t]
+\centering
+\caption{Condensed regret-growth summary across dimensions $d\in\{2,4,8,16,32,64\}$ using $R(T)\approx cT^{\beta}$ fit for $T\geq100$.}
+\label{tab:regret-beta-condensed}
+\begin{tabular}{lrrr}
+\toprule
+Method & Mean $\beta$ over $d$ & Range over $d$ & Interpretation \\
+\midrule
+LinUCB & 0.949 & [0.930, 0.966] & mildly sublinear \\
+Epsilon-greedy & 0.973 & [0.947, 1.003] & mildly sublinear \\
+Online softmax & 0.935 & [0.923, 0.958] & mildly sublinear \\
+Offline softmax & 1.005 & [0.997, 1.024] & near-linear \\
+Uniform & 0.996 & [0.984, 1.009] & near-linear \\
+\bottomrule
+\end{tabular}
+\end{table}

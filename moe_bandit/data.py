@@ -5,11 +5,28 @@ import numpy as np
 
 def _build_cluster_means(K, d, cluster_sep, cluster_std, rng):
     separation_scale = cluster_sep * cluster_std
-    # Always use random unit vectors, regardless of d vs K relationship
-    raw = rng.normal(size=(K, d))
+    if d >= K:
+        raw = rng.normal(size=(d, d))
+        q, r = np.linalg.qr(raw)
+        signs = np.sign(np.diag(r))
+        signs[signs == 0.0] = 1.0
+        q = q * signs
+        return separation_scale * q[:, :K].T
+
+    # When K > d, exact orthogonality is impossible. Draw a candidate pool and
+    # greedily keep directions that are far apart to avoid near-duplicate means.
+    n_candidates = max(256, 32 * K)
+    raw = rng.normal(size=(n_candidates, d))
     norms = np.linalg.norm(raw, axis=1, keepdims=True)
-    unit = raw / np.clip(norms, 1e-12, None)
-    return separation_scale * unit
+    candidates = raw / np.clip(norms, 1e-12, None)
+    selected = [0]
+    while len(selected) < K:
+        chosen = candidates[np.asarray(selected)]
+        distances = np.linalg.norm(candidates[:, None, :] - chosen[None, :, :], axis=2)
+        min_distances = distances.min(axis=1)
+        min_distances[np.asarray(selected)] = -np.inf
+        selected.append(int(np.argmax(min_distances)))
+    return separation_scale * candidates[np.asarray(selected)]
 
 
 def generate_synthetic_data(
@@ -48,17 +65,18 @@ def generate_synthetic_data(
     if cluster_sep < 0:
         raise ValueError("cluster_sep must be non-negative.")
 
-    rng = np.random.default_rng(seed)
+    mean_rng = np.random.default_rng(0)
+    sample_rng = np.random.default_rng(seed)
     means = _build_cluster_means(
         K=K,
         d=d,
         cluster_sep=cluster_sep,
         cluster_std=cluster_std,
-        rng=rng,
+        rng=mean_rng,
     )
 
-    cluster_id = rng.integers(low=0, high=K, size=n_samples)
-    noise = rng.normal(scale=cluster_std, size=(n_samples, d))
+    cluster_id = sample_rng.integers(low=0, high=K, size=n_samples)
+    noise = sample_rng.normal(scale=cluster_std, size=(n_samples, d))
     X = means[cluster_id] + noise
 
     # Base setup keeps labels and clusters aligned; API remains flexible.
