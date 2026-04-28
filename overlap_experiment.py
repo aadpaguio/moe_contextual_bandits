@@ -8,12 +8,14 @@ from moe_bandit.experiments import run_main_grid
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run contextual-bandit experiment grid.")
+    parser = argparse.ArgumentParser(
+        description="Run overlap-regime contextual-bandit experiment grid."
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("outputs/main_grid"),
-        help="Directory where result tables, artifacts, and plots are written.",
+        default=Path("outputs/overlap_grid"),
+        help="Directory where overlap experiment outputs are written.",
     )
     parser.add_argument(
         "-v",
@@ -23,34 +25,26 @@ def main() -> None:
         help="Increase log verbosity: default WARNING, -v INFO, -vv DEBUG.",
     )
     parser.add_argument(
-        "--regimes",
-        nargs="+",
-        choices=["independent", "joint", "overlap"],
-        default=["independent"],
-        help="Expert training regime(s): independent (per-cluster), "
-        "joint (MoE), overlap (overlapping MLP experts). "
-        "Pass multiple to compare on the same grid with matched seeds.",
-    )
-    parser.add_argument(
         "--approx-error",
         action="store_true",
-        help="Write ridge ε diagnostic per cell to approx_error_by_regime.jsonl.",
+        help="Write ridge epsilon diagnostic to approx_error_by_regime.jsonl.",
     )
     args = parser.parse_args()
-    output_dir: Path = args.output_dir
+
     if args.verbose >= 2:
         log_level = logging.DEBUG
     elif args.verbose == 1:
         log_level = logging.INFO
     else:
         log_level = logging.WARNING
+
     run_main_grid(
-        output_dir=output_dir,
-        expert_training_regimes=tuple(args.regimes),
+        output_dir=args.output_dir,
+        expert_training_regimes=("overlap",),
         write_approx_error_jsonl=args.approx_error,
         log_level=log_level,
     )
-    print(f"Saved main grid outputs to: {output_dir.resolve()}")
+    print(f"Saved overlap grid outputs to: {args.output_dir.resolve()}")
 
 
 if __name__ == "__main__":
