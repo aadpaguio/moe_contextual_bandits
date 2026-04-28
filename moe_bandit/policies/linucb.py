@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+from typing import Callable
 
 
 class LinUCBPolicy:
@@ -12,6 +13,9 @@ class LinUCBPolicy:
         lambda_reg: float = 1.0,
         forced_explore_per_arm: int = 20,
         seed: int = 0,
+        feature_map: Callable[[np.ndarray], np.ndarray] | None = None,
+        feature_dim: int | None = None,
+        add_intercept: bool = True,
     ) -> None:
         if K < 2:
             raise ValueError("K must be at least 2.")
@@ -26,7 +30,12 @@ class LinUCBPolicy:
 
         self.K = K
         self.d_raw = d
-        self.d_aug = self.d_raw + 1  # intercept
+        self.feature_map = feature_map
+        self.add_intercept = bool(add_intercept)
+        self.d_feat = int(self.d_raw if feature_dim is None else feature_dim)
+        if self.d_feat < 1:
+            raise ValueError("feature_dim must be positive.")
+        self.d_aug = self.d_feat + (1 if self.add_intercept else 0)
         self.alpha = float(alpha)
         self.lambda_reg = float(lambda_reg)
 
@@ -37,14 +46,29 @@ class LinUCBPolicy:
         self.pull_counts = np.zeros(self.K, dtype=np.int64)
         self._forced_explore_steps = int(forced_explore_per_arm) * self.K
 
-    def _augment(self, x_t: np.ndarray) -> np.ndarray:
+    def _transform(self, x_t: np.ndarray) -> np.ndarray:
         x = np.asarray(x_t, dtype=np.float64)
         if x.shape != (self.d_raw,):
             raise ValueError(f"x_t must have shape ({self.d_raw},), got {x.shape}.")
         if not np.all(np.isfinite(x)):
             raise ValueError("x_t must contain only finite values.")
+        if self.feature_map is not None:
+            feat = np.asarray(self.feature_map(x), dtype=np.float64)
+            if feat.shape != (self.d_feat,):
+                raise ValueError(
+                    f"feature_map(x_t) must have shape ({self.d_feat},), got {feat.shape}."
+                )
+            if not np.all(np.isfinite(feat)):
+                raise ValueError("feature_map(x_t) must contain only finite values.")
+            return feat
+        return x
+
+    def _augment(self, x_t: np.ndarray) -> np.ndarray:
+        feat = self._transform(x_t)
+        if not self.add_intercept:
+            return feat
         x_aug = np.empty(self.d_aug, dtype=np.float64)
-        x_aug[:-1] = x
+        x_aug[:-1] = feat
         x_aug[-1] = 1.0
         return x_aug
 

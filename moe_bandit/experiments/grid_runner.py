@@ -15,6 +15,7 @@ from moe_bandit.data import generate_synthetic_data
 from moe_bandit.experts import Expert, expert_reward_matrix, train_experts
 from moe_bandit.linear_approx_error import linear_approx_max_error
 from moe_bandit.train_joint_moe import train_joint_moe
+from moe_bandit.train_overlapping_experts import train_overlapping_experts
 from moe_bandit.policies import (
     EpsilonGreedyPolicy,
     LinUCBPolicy,
@@ -25,7 +26,7 @@ from moe_bandit.runner import RunResult, run_bandit
 
 logger = logging.getLogger(__name__)
 
-ExpertTrainingRegime = Literal["independent", "joint"]
+ExpertTrainingRegime = Literal["independent", "joint", "overlap"]
 
 
 def configure_logging(level: int = logging.INFO) -> None:
@@ -70,6 +71,9 @@ class FixedSettings:
     joint_moe_cosine_decay: bool = True
     joint_moe_early_stopping_patience: int | None = 20
     joint_moe_batch_size: int = 64
+    # Overlapping-expert training regime (used when regime is "overlap")
+    overlap_strength: float = 0.5
+    overlap_samples_per_expert: int | None = None
 
 
 @dataclass(frozen=True)
@@ -163,6 +167,13 @@ def _confusion_matrix(chosen_arm: np.ndarray, oracle_arm: np.ndarray, K: int) ->
     return cm
 
 
+def _oracle_by_cluster(oracle_arm: np.ndarray, y_true: np.ndarray, K: int) -> np.ndarray:
+    table = np.zeros((K, K), dtype=np.int64)
+    for cluster, arm in zip(y_true, oracle_arm, strict=False):
+        table[int(cluster), int(arm)] += 1
+    return table
+
+
 def _row_from_result(
     config: GridConfig,
     expert_regime: ExpertTrainingRegime,
@@ -192,9 +203,9 @@ def _train_experts_for_regime(
     X_train: np.ndarray,
     y_train: np.ndarray,
     cluster_train: np.ndarray,
-) -> list[Expert]:
+) -> tuple[list[Expert], dict[str, Any]]:
     if regime == "independent":
-        return train_experts(
+        experts = train_experts(
             X_train=X_train,
             y_train=y_train,
             cluster_id_train=cluster_train,
@@ -206,6 +217,29 @@ def _train_experts_for_regime(
             seed=cfg.seed_train_experts,
             contamination=cfg.contamination,
         )
+        return experts, {}
+    if regime == "overlap":
+        experts, overlap_stats = train_overlapping_experts(
+            X_train=X_train,
+            y_train=y_train,
+            cluster_id_train=cluster_train,
+            K=settings.K,
+            d=settings.d,
+            overlap_strength=settings.overlap_strength,
+            samples_per_expert=settings.overlap_samples_per_expert,
+            epochs=30,
+            lr=1e-3,
+            batch_size=64,
+            seed=cfg.seed_train_experts,
+        )
+        return experts, {
+            "mixture_weights": overlap_stats.mixture_weights.astype(float).tolist(),
+            "sampled_cluster_proportions": overlap_stats.sampled_cluster_proportions.astype(
+                float
+            ).tolist(),
+            "own_cluster_accuracy": overlap_stats.own_cluster_accuracy.astype(float).tolist(),
+            "cross_cluster_accuracy": overlap_stats.cross_cluster_accuracy.astype(float).tolist(),
+        }
     seed_joint = cfg.seed_train_experts + settings.seed_joint_expert_offset
     experts, _stats = train_joint_moe(
         X_train=X_train,
@@ -223,7 +257,7 @@ def _train_experts_for_regime(
         early_stopping_patience=settings.joint_moe_early_stopping_patience,
         router="linear",
     )
-    return experts
+    return experts, {}
 
 
 def run_main_grid(
@@ -317,7 +351,7 @@ def run_main_grid(
 
         for regime in expert_training_regimes:
             t0 = time.perf_counter()
-            experts = _train_experts_for_regime(
+            experts, regime_diagnostics = _train_experts_for_regime(
                 regime,
                 settings=settings,
                 cfg=cfg,
@@ -423,6 +457,8 @@ def run_main_grid(
                 },
                 "softmax_train": {"accuracy": train_acc, "loss": train_loss},
                 "reward_gap_summary": summarize_reward_gap(R),
+                "expert_training_diagnostics": regime_diagnostics,
+                "oracle_by_cluster": _oracle_by_cluster(oracle_arm=oracle_arm, y_true=y_bandit, K=settings.K).tolist(),
                 "policies": {},
             }
 

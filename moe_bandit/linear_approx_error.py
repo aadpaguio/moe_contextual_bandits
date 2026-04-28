@@ -11,8 +11,16 @@ class LinearApproxErrorReport:
 
     epsilon_per_arm: np.ndarray
     """Shape (K,): max_t |r_{t,i} - theta_i^T x_t| for fitted theta_i."""
+    rmse_per_arm: np.ndarray
+    """Shape (K,): sqrt(mean_t (r_{t,i} - theta_i^T x_t)^2)."""
+    p95_abs_per_arm: np.ndarray
+    """Shape (K,): 95th percentile of absolute residual per arm."""
     mean_epsilon: float
     max_epsilon: float
+    mean_rmse: float
+    max_rmse: float
+    mean_p95_abs: float
+    max_p95_abs: float
     lambda_reg: float
     fit_intercept: bool
 
@@ -49,17 +57,28 @@ def linear_approx_max_error(
     reg = lambda_reg * np.eye(d_aug, dtype=np.float64)
     xtx = X_design.T @ X_design + reg
     epsilons = np.zeros(K, dtype=np.float64)
+    rmses = np.zeros(K, dtype=np.float64)
+    p95_abs = np.zeros(K, dtype=np.float64)
 
     for i in range(K):
         rhs = X_design.T @ R[:, i]
         theta = np.linalg.solve(xtx, rhs)
         pred = X_design @ theta
-        epsilons[i] = float(np.max(np.abs(R[:, i] - pred)))
+        abs_residual = np.abs(R[:, i] - pred)
+        epsilons[i] = float(np.max(abs_residual))
+        rmses[i] = float(np.sqrt(np.mean(np.square(R[:, i] - pred))))
+        p95_abs[i] = float(np.quantile(abs_residual, 0.95))
 
     return LinearApproxErrorReport(
         epsilon_per_arm=epsilons,
+        rmse_per_arm=rmses,
+        p95_abs_per_arm=p95_abs,
         mean_epsilon=float(np.mean(epsilons)),
         max_epsilon=float(np.max(epsilons)),
+        mean_rmse=float(np.mean(rmses)),
+        max_rmse=float(np.max(rmses)),
+        mean_p95_abs=float(np.mean(p95_abs)),
+        max_p95_abs=float(np.max(p95_abs)),
         lambda_reg=lambda_reg,
         fit_intercept=fit_intercept,
     )

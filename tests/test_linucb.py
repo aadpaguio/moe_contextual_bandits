@@ -73,3 +73,22 @@ def test_raises_on_negative_forced_explore_per_arm():
         raise AssertionError("Expected ValueError for negative forced_explore_per_arm.")
     except ValueError:
         pass
+
+
+def test_feature_map_mode_works():
+    def quad_feature(x: np.ndarray) -> np.ndarray:
+        return np.array([x[0], x[1], x[0] * x[1]], dtype=np.float64)
+
+    policy = LinUCBPolicy(
+        K=2,
+        d=2,
+        feature_map=quad_feature,
+        feature_dim=3,
+        add_intercept=True,
+        seed=0,
+    )
+    x = np.array([0.2, -0.4], dtype=np.float64)
+    arm = policy.select(x)
+    assert 0 <= arm < 2
+    policy.update(x_t=x, a_t=arm, r_t=0.5)
+    assert int(policy.pull_counts.sum()) == 1
