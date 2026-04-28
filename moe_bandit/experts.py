@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+from typing import Literal
 
 import numpy as np
 import torch
@@ -154,9 +155,21 @@ def expert_reward_matrix(
     X: np.ndarray,
     y: np.ndarray,
     clip_eps: float = 1e-3,
+    *,
+    reward_type: Literal["log_prob", "prob", "margin"] = "log_prob",
+    temperature: float = 1.0,
 ) -> np.ndarray:
     """
-    Compute full reward matrix R[t, i] = log(clipped p_i(y_t | x_t)).
+    Compute full reward matrix R[t, i] from expert predictions.
+
+    reward_type:
+      - log_prob: log(clipped p_i(y_t | x_t)) (default)
+      - prob: clipped p_i(y_t | x_t)
+      - margin: p_i(y_t | x_t) - max_j!=y p_i(j | x_t)
+
+    temperature:
+      - logits are divided by temperature before softmax.
+      - temperature > 1 smooths probabilities; < 1 sharpens.
     """
     if len(experts) == 0:
         raise ValueError("experts must be non-empty.")
@@ -166,6 +179,10 @@ def expert_reward_matrix(
         raise ValueError("y must be 1D with the same length as X.")
     if not (0.0 < clip_eps < 0.5):
         raise ValueError("clip_eps must be in (0, 0.5).")
+    if reward_type not in {"log_prob", "prob", "margin"}:
+        raise ValueError("reward_type must be one of: log_prob, prob, margin.")
+    if temperature <= 0:
+        raise ValueError("temperature must be positive.")
 
     n_samples = X.shape[0]
     K = len(experts)
@@ -179,10 +196,19 @@ def expert_reward_matrix(
     with torch.no_grad():
         for i, expert in enumerate(experts):
             expert.eval()
-            logits = expert(x_t)
+            logits = expert(x_t) / float(temperature)
             probs = torch.softmax(logits, dim=1)
             probs = torch.clamp(probs, min=clip_eps, max=1.0 - clip_eps)
             chosen = probs[torch.arange(n_samples, device=device), y_t]
-            rewards[:, i] = torch.log(chosen).cpu().numpy().astype(np.float64)
+            if reward_type == "log_prob":
+                reward_vec = torch.log(chosen)
+            elif reward_type == "prob":
+                reward_vec = chosen
+            else:
+                masked = probs.clone()
+                masked[torch.arange(n_samples, device=device), y_t] = -1.0
+                max_other = masked.max(dim=1).values
+                reward_vec = chosen - max_other
+            rewards[:, i] = reward_vec.cpu().numpy().astype(np.float64)
 
     return rewards

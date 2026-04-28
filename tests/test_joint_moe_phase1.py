@@ -47,8 +47,12 @@ def test_linear_approx_max_error_matches_shape():
     R = rng.normal(size=(T, K))
     rep = linear_approx_max_error(R, X, lambda_reg=1.0, fit_intercept=True)
     assert rep.epsilon_per_arm.shape == (K,)
+    assert rep.rmse_per_arm.shape == (K,)
+    assert rep.p95_abs_per_arm.shape == (K,)
     assert rep.mean_epsilon >= 0
     assert rep.max_epsilon >= rep.mean_epsilon - 1e-9
+    assert rep.mean_rmse >= 0
+    assert rep.max_rmse >= rep.mean_rmse - 1e-9
 
 
 def test_phase1_reference_config_joint_training():
