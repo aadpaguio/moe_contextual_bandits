@@ -1,4 +1,4 @@
-# MoE contextual bandits
+# Learning to Route Frozen Experts with Contextual Bandits
 
 Synthetic clustered contextual bandits with mixture-of-experts training, LinUCB / softmax / ε-greedy policies, and experiment tooling for grids and report bundles.
 
