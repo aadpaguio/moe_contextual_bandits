@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -10,12 +9,7 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from moe_bandit.experts import Expert
-
-
-def _get_default_device() -> torch.device:
-    if os.environ.get("MOE_BANDIT_USE_MPS", "0") == "1" and torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
+from moe_bandit.torch_device import default_torch_device
 
 
 def _set_training_seeds(seed: int) -> None:
@@ -229,7 +223,7 @@ def train_joint_moe(
         raise ValueError(f"y_train must be in [0, {n_cls}).")
 
     _set_training_seeds(seed)
-    device = _get_default_device()
+    device = default_torch_device()
 
     n_total = X_train.shape[0]
     rng_split = np.random.default_rng(seed + 42)

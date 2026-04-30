@@ -1,17 +1,11 @@
 from __future__ import annotations
 
-import os
 import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-
-def _default_device() -> torch.device:
-    # Keep CPU as the default for reproducibility/stability; opt in to MPS explicitly.
-    if os.environ.get("MOE_BANDIT_USE_MPS", "0") == "1" and torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
+from moe_bandit.torch_device import default_torch_device
 
 
 class _SoftmaxRouterNet(nn.Module):
@@ -85,7 +79,7 @@ class OnlineSoftmaxPolicy:
         self.K = int(K)
         self.temperature = float(temperature)
         self.baseline_momentum = float(baseline_momentum)
-        self.device = _default_device()
+        self.device = default_torch_device()
         self.model = nn.Linear(self.d, self.K).to(self.device)
         self.opt = torch.optim.Adam(self.model.parameters(), lr=lr)
         self.rng = np.random.default_rng(seed)
@@ -163,7 +157,7 @@ def _train_router_on_labels(
     _, d = X_train.shape
     torch.manual_seed(seed)
     np.random.seed(seed)
-    device = _default_device()
+    device = default_torch_device()
 
     model = _SoftmaxRouterNet(d_in=d, K=K, hidden_dim=hidden_dim).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=lr)

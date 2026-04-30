@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
 
 import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
+
+from moe_bandit.torch_device import default_torch_device
 
 
 class Expert(nn.Module):
@@ -45,13 +46,6 @@ def _to_tensors(X: np.ndarray, y: np.ndarray) -> tuple[torch.Tensor, torch.Tenso
     return x_t, y_t
 
 
-def _get_default_device() -> torch.device:
-    # Keep CPU as the default for reproducibility/stability; opt in to MPS explicitly.
-    if os.environ.get("MOE_BANDIT_USE_MPS", "0") == "1" and torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
-
-
 def train_experts(
     X_train: np.ndarray,
     y_train: np.ndarray,
@@ -84,7 +78,7 @@ def train_experts(
 
     cfg = _TrainConfig(epochs=epochs, lr=lr, batch_size=batch_size, seed=seed)
     _set_training_seeds(cfg.seed)
-    device = _get_default_device()
+    device = default_torch_device()
 
     experts: list[Expert] = []
     for expert_idx in range(K):
